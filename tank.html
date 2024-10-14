@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tank Game with Smooth Movement</title>
+    <title>Tank Game with HP System and Shoot Countdown</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -46,6 +46,13 @@
         height: 6px;
         transform: translate(-50%, -50%);
       }
+      .tank-container {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: all 0.3s ease;
+      }
       .tank {
         width: 25px;
         height: 25px;
@@ -54,10 +61,9 @@
         justify-content: center;
         align-items: center;
         color: white;
-        position: absolute;
-        transition: all 0.3s ease;
-        z-index: 2;
         font-size: 10px;
+        position: relative;
+        z-index: 2;
       }
       .tank::after {
         content: "";
@@ -69,6 +75,28 @@
         left: 50%;
         transform-origin: left center;
         transition: transform 0.3s ease;
+      }
+      .tank-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 2px;
+      }
+      .hp-bar {
+        display: flex;
+        justify-content: center;
+      }
+      .hp {
+        width: 6px;
+        height: 6px;
+        background-color: red;
+        border-radius: 50%;
+        margin: 0 1px;
+      }
+      .countdown {
+        font-size: 8px;
+        color: #333;
+        margin-top: 1px;
       }
       .shoot-range {
         background-color: rgba(255, 255, 0, 0.2);
@@ -128,8 +156,10 @@
       const SHOOT_RANGE = 3;
       const OBSTACLE_COUNT = 40;
       const TANK_COUNT = 20;
-      const BULLET_SPEED = 300; // milliseconds per cell
+      const BULLET_SPEED = 200; // milliseconds per cell
       const CELL_SIZE = 31; // 30px + 1px gap
+      const MAX_HP = 3;
+      const SHOOT_COOLDOWN = 3; // 3 seconds cooldown
 
       let grid = Array(GRID_SIZE)
         .fill()
@@ -155,7 +185,15 @@
           const direction = ["up", "right", "down", "left"][
             Math.floor(Math.random() * 4)
           ];
-          const tank = { id: i + 1, x, y, direction, symbol: `T${i + 1}` };
+          const tank = {
+            id: i + 1,
+            x,
+            y,
+            direction,
+            symbol: `T${i + 1}`,
+            hp: MAX_HP,
+            shootCooldown: 0,
+          };
           tanks.push(tank);
           grid[y][x] = tank.symbol;
 
@@ -205,14 +243,40 @@
         });
 
         tanks.forEach((tank) => {
+          const tankContainer = document.createElement("div");
+          tankContainer.className = "tank-container";
+          tankContainer.style.left = `${tank.x * CELL_SIZE}px`;
+          tankContainer.style.top = `${tank.y * CELL_SIZE}px`;
+
           const tankElement = document.createElement("div");
           tankElement.className = `tank tank${tank.id}`;
           tankElement.textContent = tank.symbol;
-          tankElement.style.left = `${tank.x * CELL_SIZE}px`;
-          tankElement.style.top = `${tank.y * CELL_SIZE}px`;
           const rotation = directionToDegrees(tank.direction);
           tankElement.style.transform = `rotate(${rotation}deg)`;
-          gridElement.appendChild(tankElement);
+
+          const tankInfo = document.createElement("div");
+          tankInfo.className = "tank-info";
+
+          const hpBar = document.createElement("div");
+          hpBar.className = "hp-bar";
+          for (let i = 0; i < MAX_HP; i++) {
+            const hp = document.createElement("div");
+            hp.className = "hp";
+            hp.style.opacity = i < tank.hp ? 1 : 0.3;
+            hpBar.appendChild(hp);
+          }
+
+          const countdown = document.createElement("div");
+          countdown.className = "countdown";
+          countdown.textContent =
+            tank.shootCooldown > 0 ? tank.shootCooldown : "";
+
+          tankInfo.appendChild(hpBar);
+          tankInfo.appendChild(countdown);
+
+          tankContainer.appendChild(tankElement);
+          tankContainer.appendChild(tankInfo);
+          gridElement.appendChild(tankContainer);
 
           const [dx, dy] = getDirectionVector(tank.direction);
           for (let i = 1; i <= SHOOT_RANGE; i++) {
@@ -334,6 +398,8 @@
       }
 
       function shoot(tank) {
+        if (tank.shootCooldown > 0) return;
+
         const [dx, dy] = getDirectionVector(tank.direction);
         let x = tank.x + dx;
         let y = tank.y + dy;
@@ -348,6 +414,7 @@
             shooterId: tank.id,
           });
           addToGameLog(`Tank ${tank.id} fired a shot!`);
+          tank.shootCooldown = SHOOT_COOLDOWN;
         } else {
           addToGameLog(`Tank ${tank.id} tried to shoot outside the grid!`);
         }
@@ -388,13 +455,13 @@
               (t) => t.x === gridX && t.y === gridY && t.id !== bullet.shooterId
             );
             if (hitTank) {
-              addToGameLog(`Tank ${hitTank.id} was hit and destroyed!`);
+              hitTank.hp--;
+              addToGameLog(`Tank ${hitTank.id} was hit! HP: ${hitTank.hp}`);
               createExplosion(gridX, gridY);
-              setTimeout(() => {
+              if (hitTank.hp <= 0) {
+                addToGameLog(`Tank ${hitTank.id} was destroyed!`);
                 tanks = tanks.filter((t) => t.id !== hitTank.id);
-                updateGrid();
-                renderGrid();
-              }, 500); // Delay tank removal to show explosion
+              }
               return false;
             }
           }
@@ -428,6 +495,14 @@
         }
       }
 
+      function updateTanks() {
+        tanks.forEach((tank) => {
+          if (tank.shootCooldown > 0) {
+            tank.shootCooldown--;
+          }
+        });
+      }
+
       function checkGameOver() {
         if (tanks.length <= 1) {
           clearInterval(gameInterval);
@@ -443,6 +518,7 @@
       }
 
       function gameLoop() {
+        updateTanks();
         tanks = tanks.map((tank) => {
           const newTank = moveTank(tank);
           if (Math.random() < 0.3) {
@@ -465,7 +541,7 @@
         initializeTanks();
         updateGrid();
         renderGrid();
-        gameInterval = setInterval(gameLoop, 800); // เปลี่ยนจาก 1000 เป็น 300 เพื่อให้เคลื่อนไหวเร็วขึ้น
+        gameInterval = setInterval(gameLoop, 1000);
         bulletInterval = setInterval(updateBullets, BULLET_SPEED);
       }
 
