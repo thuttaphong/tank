@@ -1,349 +1,475 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tank Game with Fixed Bullet Trajectory</title>
-  <style>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tank Game with Explosion Effects</title>
+    <style>
       body {
-          font-family: Arial, sans-serif;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh;
-          margin: 0;
-          background-color: #f0f0f0;
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f0f0f0;
       }
       .game-container {
-          text-align: center;
+        text-align: center;
       }
       .grid {
-          display: inline-grid;
-          grid-template-columns: repeat(20, 30px);
-          grid-gap: 1px;
-          background-color: #ccc;
-          padding: 1px;
-          margin-bottom: 20px;
-          position: relative;
+        display: inline-grid;
+        grid-template-columns: repeat(20, 30px);
+        grid-gap: 1px;
+        background-color: #ccc;
+        padding: 1px;
+        margin-bottom: 20px;
+        position: relative;
       }
       .cell {
-          width: 30px;
-          height: 30px;
-          background-color: #fff;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          position: relative;
+        width: 30px;
+        height: 30px;
+        background-color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
       }
       .obstacle {
-          background-color: #333;
+        background-color: #333;
       }
       .bullet {
-          position: absolute;
-          background-color: #ff0000;
-          border-radius: 50%;
-          width: 6px;
-          height: 6px;
-          transform: translate(-50%, -50%);
+        position: absolute;
+        background-color: #ff0000;
+        border-radius: 50%;
+        width: 6px;
+        height: 6px;
+        transform: translate(-50%, -50%);
       }
       .tank {
-          width: 25px;
-          height: 25px;
-          border-radius: 50%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          color: white;
-          position: relative;
-          transition: transform 0.3s ease;
-          z-index: 2;
-          font-size: 10px;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        position: relative;
+        transition: transform 0.3s ease;
+        z-index: 2;
+        font-size: 10px;
       }
       .tank::after {
-          content: '';
-          position: absolute;
-          width: 15px;
-          height: 3px;
-          background-color: #000;
-          top: 50%;
-          left: 50%;
-          transform-origin: left center;
+        content: "";
+        position: absolute;
+        width: 15px;
+        height: 3px;
+        background-color: #000;
+        top: 50%;
+        left: 50%;
+        transform-origin: left center;
       }
       .shoot-range {
-          background-color: rgba(255, 255, 0, 0.2);
+        background-color: rgba(255, 255, 0, 0.2);
       }
       #gameLog {
-          max-width: 300px;
-          margin: 0 auto;
-          text-align: left;
-          height: 150px;
-          overflow-y: auto;
+        max-width: 300px;
+        margin: 0 auto;
+        text-align: left;
+        height: 150px;
+        overflow-y: auto;
       }
       #gameLog h2 {
-          margin-bottom: 10px;
+        margin-bottom: 10px;
       }
       #gameLog ul {
-          padding-left: 20px;
+        padding-left: 20px;
       }
-  </style>
-</head>
-<body>
-<div class="game-container">
-  <h1>Tank Game</h1>
-  <div id="grid" class="grid"></div>
-  <div id="gameLog">
-    <h2>Game Log</h2>
-    <ul id="logList"></ul>
-  </div>
-</div>
-
-<script>
-  const GRID_SIZE = 20;
-  const OBSTACLE_SYMBOL = '#';
-  const BULLET_SYMBOL = '*';
-  const SHOOT_RANGE = 2;
-  const OBSTACLE_COUNT = 40;
-  const TANK_COUNT = 20;
-  const BULLET_SPEED = 200; // milliseconds per cell
-  const CELL_SIZE = 31; // 30px + 1px gap
-
-  let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill('.'));
-  let tanks = [];
-  let bullets = [];
-  let gameInterval;
-  let bulletInterval;
-
-  function generateTankColor(id) {
-    const hue = (id * 137.5) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
-  }
-
-  function initializeTanks() {
-    for (let i = 0; i < TANK_COUNT; i++) {
-      let x, y;
-      do {
-        x = Math.floor(Math.random() * GRID_SIZE);
-        y = Math.floor(Math.random() * GRID_SIZE);
-      } while (grid[y][x] !== '.');
-
-      const direction = ['up', 'right', 'down', 'left'][Math.floor(Math.random() * 4)];
-      const tank = { id: i + 1, x, y, direction, symbol: `T${i + 1}` };
-      tanks.push(tank);
-      grid[y][x] = tank.symbol;
-
-      const style = document.createElement('style');
-      style.textContent = `.tank${i + 1} { background-color: ${generateTankColor(i + 1)}; }`;
-      document.head.appendChild(style);
-    }
-  }
-
-  function placeObstacles() {
-    for (let i = 0; i < OBSTACLE_COUNT; i++) {
-      let x, y;
-      do {
-        x = Math.floor(Math.random() * GRID_SIZE);
-        y = Math.floor(Math.random() * GRID_SIZE);
-      } while (grid[y][x] !== '.');
-      grid[y][x] = OBSTACLE_SYMBOL;
-    }
-  }
-
-  function updateGrid() {
-    grid = grid.map(row => row.map(cell => cell === OBSTACLE_SYMBOL ? OBSTACLE_SYMBOL : '.'));
-    tanks.forEach(tank => {
-      grid[tank.y][tank.x] = tank.symbol;
-    });
-  }
-
-  function renderGrid() {
-    const gridElement = document.getElementById('grid');
-    gridElement.innerHTML = '';
-
-    grid.forEach((row, y) => {
-      row.forEach((cell, x) => {
-        const cellElement = document.createElement('div');
-        cellElement.className = 'cell';
-        cellElement.dataset.x = x;
-        cellElement.dataset.y = y;
-        if (cell === OBSTACLE_SYMBOL) {
-          cellElement.classList.add('obstacle');
-        } else if (cell !== '.') {
-          const tank = document.createElement('div');
-          tank.className = `tank tank${cell.slice(1)}`;
-          tank.textContent = cell;
-          const tankObj = tanks.find(t => t.symbol === cell);
-          if (tankObj) {
-            const rotation = directionToDegrees(tankObj.direction);
-            tank.style.transform = `rotate(${rotation}deg)`;
-          }
-          cellElement.appendChild(tank);
+      .explosion {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        background-color: orange;
+        border-radius: 50%;
+        animation: explode 0.5s ease-out;
+        z-index: 3;
+      }
+      @keyframes explode {
+        0% {
+          transform: scale(0);
+          opacity: 1;
         }
-        gridElement.appendChild(cellElement);
-      });
-    });
-
-    tanks.forEach(tank => {
-      const [dx, dy] = getDirectionVector(tank.direction);
-      for (let i = 1; i <= SHOOT_RANGE; i++) {
-        const rangeX = tank.x + dx * i;
-        const rangeY = tank.y + dy * i;
-        if (rangeX >= 0 && rangeX < GRID_SIZE && rangeY >= 0 && rangeY < GRID_SIZE) {
-          const rangeCell = document.querySelector(`.cell[data-x="${rangeX}"][data-y="${rangeY}"]`);
-          if (rangeCell) {
-            rangeCell.classList.add('shoot-range');
-          }
+        50% {
+          transform: scale(1.5);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(2);
+          opacity: 0;
         }
       }
-    });
+    </style>
+  </head>
+  <body>
+    <div class="game-container">
+      <h1>Tank Game</h1>
+      <div id="grid" class="grid"></div>
+      <div id="gameLog">
+        <h2>Game Log</h2>
+        <ul id="logList"></ul>
+      </div>
+    </div>
 
-    renderBullets();
-  }
+    <script>
+      const GRID_SIZE = 20;
+      const OBSTACLE_SYMBOL = "#";
+      const BULLET_SYMBOL = "*";
+      const SHOOT_RANGE = 3;
+      const OBSTACLE_COUNT = 40;
+      const TANK_COUNT = 20;
+      const BULLET_SPEED = 200; // milliseconds per cell
+      const CELL_SIZE = 31; // 30px + 1px gap
 
-  function renderBullets() {
-    const gridElement = document.getElementById('grid');
-    gridElement.querySelectorAll('.bullet').forEach(b => b.remove());
-    bullets.forEach(bullet => {
-      if (bullet.x >= 0 && bullet.x < GRID_SIZE && bullet.y >= 0 && bullet.y < GRID_SIZE) {
-        const bulletElement = document.createElement('div');
-        bulletElement.className = 'bullet';
-        bulletElement.style.left = `${bullet.x * CELL_SIZE + CELL_SIZE / 2}px`;
-        bulletElement.style.top = `${bullet.y * CELL_SIZE + CELL_SIZE / 2}px`;
-        gridElement.appendChild(bulletElement);
+      let grid = Array(GRID_SIZE)
+        .fill()
+        .map(() => Array(GRID_SIZE).fill("."));
+      let tanks = [];
+      let bullets = [];
+      let gameInterval;
+      let bulletInterval;
+
+      function generateTankColor(id) {
+        const hue = (id * 137.5) % 360;
+        return `hsl(${hue}, 70%, 50%)`;
       }
-    });
-  }
 
-  function getDirectionVector(direction) {
-    const directionVectors = {
-      'up': [0, -1], 'down': [0, 1], 'left': [-1, 0], 'right': [1, 0],
-      'up-left': [-1, -1], 'up-right': [1, -1], 'down-left': [-1, 1], 'down-right': [1, 1]
-    };
-    return directionVectors[direction] || [0, 0];
-  }
+      function initializeTanks() {
+        for (let i = 0; i < TANK_COUNT; i++) {
+          let x, y;
+          do {
+            x = Math.floor(Math.random() * GRID_SIZE);
+            y = Math.floor(Math.random() * GRID_SIZE);
+          } while (grid[y][x] !== ".");
 
-  function directionToDegrees(direction) {
-    const directionMap = {
-      'up': 270, 'down': 90, 'left': 180, 'right': 0,
-      'up-left': 225, 'up-right': 315, 'down-left': 135, 'down-right': 45
-    };
-    return directionMap[direction] || 0;
-  }
+          const direction = ["up", "right", "down", "left"][
+            Math.floor(Math.random() * 4)
+          ];
+          const tank = { id: i + 1, x, y, direction, symbol: `T${i + 1}` };
+          tanks.push(tank);
+          grid[y][x] = tank.symbol;
 
-  function moveTank(tank) {
-    const directions = ['up', 'up-right', 'right', 'down-right', 'down', 'down-left', 'left', 'up-left'];
-    const newTank = { ...tank };
+          const style = document.createElement("style");
+          style.textContent = `.tank${
+            i + 1
+          } { background-color: ${generateTankColor(i + 1)}; }`;
+          document.head.appendChild(style);
+        }
+      }
 
-    const newDirection = directions[Math.floor(Math.random() * directions.length)];
-    newTank.direction = newDirection;
+      function placeObstacles() {
+        for (let i = 0; i < OBSTACLE_COUNT; i++) {
+          let x, y;
+          do {
+            x = Math.floor(Math.random() * GRID_SIZE);
+            y = Math.floor(Math.random() * GRID_SIZE);
+          } while (grid[y][x] !== ".");
+          grid[y][x] = OBSTACLE_SYMBOL;
+        }
+      }
 
-    const [dx, dy] = getDirectionVector(newDirection);
-    const newX = tank.x + dx;
-    const newY = tank.y + dy;
+      function updateGrid() {
+        grid = grid.map((row) =>
+          row.map((cell) => (cell === OBSTACLE_SYMBOL ? OBSTACLE_SYMBOL : "."))
+        );
+        tanks.forEach((tank) => {
+          grid[tank.y][tank.x] = tank.symbol;
+        });
+      }
 
-    if (newX >= 0 && newX < GRID_SIZE && newY >= 0 && newY < GRID_SIZE && grid[newY][newX] === '.') {
-      newTank.x = newX;
-      newTank.y = newY;
-      addToGameLog(`Tank ${tank.id} moved ${newDirection}`);
-    } else {
-      addToGameLog(`Tank ${tank.id} rotated to ${newDirection} but couldn't move`);
-    }
+      function renderGrid() {
+        const gridElement = document.getElementById("grid");
+        gridElement.innerHTML = "";
 
-    return newTank;
-  }
+        grid.forEach((row, y) => {
+          row.forEach((cell, x) => {
+            const cellElement = document.createElement("div");
+            cellElement.className = "cell";
+            cellElement.dataset.x = x;
+            cellElement.dataset.y = y;
+            if (cell === OBSTACLE_SYMBOL) {
+              cellElement.classList.add("obstacle");
+            } else if (cell !== ".") {
+              const tank = document.createElement("div");
+              tank.className = `tank tank${cell.slice(1)}`;
+              tank.textContent = cell;
+              const tankObj = tanks.find((t) => t.symbol === cell);
+              if (tankObj) {
+                const rotation = directionToDegrees(tankObj.direction);
+                tank.style.transform = `rotate(${rotation}deg)`;
+              }
+              cellElement.appendChild(tank);
+            }
+            gridElement.appendChild(cellElement);
+          });
+        });
 
-  function shoot(tank) {
-    const [dx, dy] = getDirectionVector(tank.direction);
-    let x = tank.x + dx;
-    let y = tank.y + dy;
+        tanks.forEach((tank) => {
+          const [dx, dy] = getDirectionVector(tank.direction);
+          for (let i = 1; i <= SHOOT_RANGE; i++) {
+            const rangeX = tank.x + dx * i;
+            const rangeY = tank.y + dy * i;
+            if (
+              rangeX >= 0 &&
+              rangeX < GRID_SIZE &&
+              rangeY >= 0 &&
+              rangeY < GRID_SIZE
+            ) {
+              if (grid[rangeY][rangeX] === OBSTACLE_SYMBOL) {
+                break; // Stop showing range when hitting an obstacle
+              }
+              const rangeCell = document.querySelector(
+                `.cell[data-x="${rangeX}"][data-y="${rangeY}"]`
+              );
+              if (rangeCell) {
+                rangeCell.classList.add("shoot-range");
+              }
+            } else {
+              break; // Stop showing range when out of grid
+            }
+          }
+        });
 
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-      bullets.push({ x: tank.x, y: tank.y, dx, dy, range: SHOOT_RANGE, shooterId: tank.id });
-      addToGameLog(`Tank ${tank.id} fired a shot!`);
-    } else {
-      addToGameLog(`Tank ${tank.id} tried to shoot outside the grid!`);
-    }
-  }
+        renderBullets();
+      }
 
-  function updateBullets() {
-    bullets = bullets.filter(bullet => {
-      bullet.x += bullet.dx;
-      bullet.y += bullet.dy;
-      bullet.range--;
+      function renderBullets() {
+        const gridElement = document.getElementById("grid");
+        gridElement.querySelectorAll(".bullet").forEach((b) => b.remove());
+        bullets.forEach((bullet) => {
+          if (
+            bullet.x >= 0 &&
+            bullet.x < GRID_SIZE &&
+            bullet.y >= 0 &&
+            bullet.y < GRID_SIZE
+          ) {
+            const bulletElement = document.createElement("div");
+            bulletElement.className = "bullet";
+            bulletElement.style.left = `${
+              bullet.x * CELL_SIZE + CELL_SIZE / 2
+            }px`;
+            bulletElement.style.top = `${
+              bullet.y * CELL_SIZE + CELL_SIZE / 2
+            }px`;
+            gridElement.appendChild(bulletElement);
+          }
+        });
+      }
 
-      if (bullet.x < 0 || bullet.x >= GRID_SIZE || bullet.y < 0 || bullet.y >= GRID_SIZE) {
-        addToGameLog(`A bullet went out of bounds!`);
+      function getDirectionVector(direction) {
+        const directionVectors = {
+          up: [0, -1],
+          down: [0, 1],
+          left: [-1, 0],
+          right: [1, 0],
+          "up-left": [-1, -1],
+          "up-right": [1, -1],
+          "down-left": [-1, 1],
+          "down-right": [1, 1],
+        };
+        return directionVectors[direction] || [0, 0];
+      }
+
+      function directionToDegrees(direction) {
+        const directionMap = {
+          up: 270,
+          down: 90,
+          left: 180,
+          right: 0,
+          "up-left": 225,
+          "up-right": 315,
+          "down-left": 135,
+          "down-right": 45,
+        };
+        return directionMap[direction] || 0;
+      }
+
+      function moveTank(tank) {
+        const directions = [
+          "up",
+          "up-right",
+          "right",
+          "down-right",
+          "down",
+          "down-left",
+          "left",
+          "up-left",
+        ];
+        const newTank = { ...tank };
+
+        const newDirection =
+          directions[Math.floor(Math.random() * directions.length)];
+        newTank.direction = newDirection;
+
+        const [dx, dy] = getDirectionVector(newDirection);
+        const newX = tank.x + dx;
+        const newY = tank.y + dy;
+
+        if (
+          newX >= 0 &&
+          newX < GRID_SIZE &&
+          newY >= 0 &&
+          newY < GRID_SIZE &&
+          grid[newY][newX] === "."
+        ) {
+          newTank.x = newX;
+          newTank.y = newY;
+          addToGameLog(`Tank ${tank.id} moved ${newDirection}`);
+        } else {
+          addToGameLog(
+            `Tank ${tank.id} rotated to ${newDirection} but couldn't move`
+          );
+        }
+
+        return newTank;
+      }
+
+      function shoot(tank) {
+        const [dx, dy] = getDirectionVector(tank.direction);
+        let x = tank.x + dx;
+        let y = tank.y + dy;
+
+        if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
+          bullets.push({
+            x: tank.x,
+            y: tank.y,
+            dx,
+            dy,
+            range: SHOOT_RANGE,
+            shooterId: tank.id,
+          });
+          addToGameLog(`Tank ${tank.id} fired a shot!`);
+        } else {
+          addToGameLog(`Tank ${tank.id} tried to shoot outside the grid!`);
+        }
+      }
+
+      function updateBullets() {
+        bullets = bullets.filter((bullet) => {
+          let newX = bullet.x;
+          let newY = bullet.y;
+          const steps = Math.max(Math.abs(bullet.dx), Math.abs(bullet.dy));
+          const stepX = bullet.dx / steps;
+          const stepY = bullet.dy / steps;
+
+          for (let i = 0; i < steps; i++) {
+            newX += stepX;
+            newY += stepY;
+
+            if (
+              newX < 0 ||
+              newX >= GRID_SIZE ||
+              newY < 0 ||
+              newY >= GRID_SIZE
+            ) {
+              addToGameLog(`A bullet went out of bounds!`);
+              return false;
+            }
+
+            const gridX = Math.floor(newX);
+            const gridY = Math.floor(newY);
+
+            if (grid[gridY][gridX] === OBSTACLE_SYMBOL) {
+              addToGameLog(`A bullet hit an obstacle!`);
+              createExplosion(gridX, gridY);
+              return false;
+            }
+
+            const hitTank = tanks.find(
+              (t) => t.x === gridX && t.y === gridY && t.id !== bullet.shooterId
+            );
+            if (hitTank) {
+              addToGameLog(`Tank ${hitTank.id} was hit and destroyed!`);
+              createExplosion(gridX, gridY);
+              setTimeout(() => {
+                tanks = tanks.filter((t) => t.id !== hitTank.id);
+                updateGrid();
+                renderGrid();
+              }, 500); // Delay tank removal to show explosion
+              return false;
+            }
+          }
+
+          bullet.x = newX;
+          bullet.y = newY;
+          bullet.range--;
+
+          return bullet.range > 0;
+        });
+
+        renderBullets();
+      }
+
+      function createExplosion(x, y) {
+        const explosion = document.createElement("div");
+        explosion.className = "explosion";
+        explosion.style.left = `${x * CELL_SIZE}px`;
+        explosion.style.top = `${y * CELL_SIZE}px`;
+        document.querySelector(".grid").appendChild(explosion);
+        setTimeout(() => explosion.remove(), 500); // Remove after animation
+      }
+
+      function addToGameLog(message) {
+        const logList = document.getElementById("logList");
+        const logItem = document.createElement("li");
+        logItem.textContent = message;
+        logList.insertBefore(logItem, logList.firstChild);
+        if (logList.children.length > 20) {
+          logList.removeChild(logList.lastChild);
+        }
+      }
+
+      function checkGameOver() {
+        if (tanks.length <= 1) {
+          clearInterval(gameInterval);
+          clearInterval(bulletInterval);
+          if (tanks.length === 1) {
+            addToGameLog(`Game Over! Tank ${tanks[0].id} wins!`);
+          } else {
+            addToGameLog(`Game Over! It's a draw!`);
+          }
+          return true;
+        }
         return false;
       }
 
-      if (grid[Math.floor(bullet.y)][Math.floor(bullet.x)] === OBSTACLE_SYMBOL) {
-        addToGameLog(`A bullet hit an obstacle!`);
-        return false;
+      function gameLoop() {
+        tanks = tanks.map((tank) => {
+          const newTank = moveTank(tank);
+          if (Math.random() < 0.3) {
+            // 30% chance to shoot
+            shoot(newTank);
+          }
+          return newTank;
+        });
+
+        updateGrid();
+        renderGrid();
+
+        if (checkGameOver()) {
+          renderGrid();
+        }
       }
 
-      const hitTank = tanks.find(t => t.x === Math.floor(bullet.x) && t.y === Math.floor(bullet.y) && t.id !== bullet.shooterId);
-      if (hitTank) {
-        addToGameLog(`Tank ${hitTank.id} was hit and destroyed!`);
-        tanks = tanks.filter(t => t.id !== hitTank.id);
-        return false;
+      function initGame() {
+        placeObstacles();
+        initializeTanks();
+        updateGrid();
+        renderGrid();
+        gameInterval = setInterval(gameLoop, 1000);
+        bulletInterval = setInterval(updateBullets, BULLET_SPEED);
       }
 
-      return bullet.range > 0;
-    });
-
-    renderBullets();
-  }
-
-  function addToGameLog(message) {
-    const logList = document.getElementById('logList');
-    const logItem = document.createElement('li');
-    logItem.textContent = message;
-    logList.insertBefore(logItem, logList.firstChild);
-    if (logList.children.length > 20) {
-      logList.removeChild(logList.lastChild);
-    }
-  }
-
-  function checkGameOver() {
-    if (tanks.length <= 1) {
-      clearInterval(gameInterval);
-      clearInterval(bulletInterval);
-      if (tanks.length === 1) {
-        addToGameLog(`Game Over! Tank ${tanks[0].id} wins!`);
-      } else {
-        addToGameLog(`Game Over! It's a draw!`);
-      }
-      return true;
-    }
-    return false;
-  }
-
-  function gameLoop() {
-    tanks = tanks.map(tank => {
-      const newTank = moveTank(tank);
-      if (Math.random() < 0.3) {  // 30% chance to shoot
-        shoot(newTank);
-      }
-      return newTank;
-    });
-
-    updateGrid();
-    renderGrid();
-
-    if (checkGameOver()) {
-      renderGrid();
-    }
-  }
-
-  function initGame() {
-    placeObstacles();
-    initializeTanks();
-    updateGrid();
-    renderGrid();
-    gameInterval = setInterval(gameLoop, 500);
-    bulletInterval = setInterval(updateBullets, BULLET_SPEED);
-  }
-
-  initGame();
-</script>
-</body>
+      initGame();
+    </script>
+  </body>
 </html>
