@@ -51,7 +51,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
       }
       .tank {
         width: 25px;
@@ -75,6 +75,23 @@
         left: 50%;
         transform-origin: left center;
         transition: transform 0.3s ease;
+      }
+      .golden-tank {
+        background-color: gold;
+        transition: all 0.1s ease;
+      }
+      .player-tank {
+        background-color: #fff;
+        background: linear-gradient(
+          90deg,
+          red 0%,
+          red 25%,
+          white 25%,
+          white 50%,
+          blue 50%,
+          blue 100%
+        );
+        position: relative;
       }
       .tank-info {
         display: flex;
@@ -137,6 +154,41 @@
           opacity: 0;
         }
       }
+
+      /* Modal Style */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-content {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+      }
+
+      #restartButton {
+        margin-top: 20px;
+        padding: 10px 20px;
+        background-color: #333;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      #restartButton:hover {
+        background-color: #555;
+      }
     </style>
   </head>
   <body>
@@ -149,17 +201,33 @@
       </div>
     </div>
 
+    <!-- Modal Structure -->
+    <div id="gameOverModal" class="modal">
+      <div class="modal-content">
+        <h2>Game Over!</h2>
+        <p id="killCount"></p>
+        <button id="restartButton">Restart</button>
+      </div>
+    </div>
+
     <script>
       const GRID_SIZE = 20;
       const OBSTACLE_SYMBOL = "#";
       const BULLET_SYMBOL = "*";
-      const SHOOT_RANGE = 3;
+      const REGULAR_SHOOT_RANGE = 3;
+      const PLAYER_SHOOT_RANGE = 3;
+      const GOLDEN_SHOOT_RANGE = 6;
       const OBSTACLE_COUNT = 40;
-      const TANK_COUNT = 20;
-      const BULLET_SPEED = 200; // milliseconds per cell
-      const CELL_SIZE = 31; // 30px + 1px gap
+      const MAX_TANK_COUNT = 50; // เพิ่มจำนวน tank เป็น 50 ตัว
+      const TANK_COUNT = 50; // เริ่มต้นด้วย 50 tank
+      const BULLET_SPEED = 200;
+      const GOLDEN_BULLET_SPEED = 100;
+      const CELL_SIZE = 31;
       const MAX_HP = 3;
-      const SHOOT_COOLDOWN = 3; // 3 seconds cooldown
+      const GOLDEN_HP = 6;
+      const PLAYER_HP = 3;
+      const SHOOT_COOLDOWN = 3;
+      const REGENERATION_THRESHOLD = 0.1; // Tank ตาย 10% ให้สุ่มเกิดใหม่
 
       let grid = Array(GRID_SIZE)
         .fill()
@@ -168,41 +236,97 @@
       let bullets = [];
       let gameInterval;
       let bulletInterval;
+      let playerKills = 0;
+      let totalTankDeaths = 0;
 
       function generateTankColor(id) {
         const hue = (id * 137.5) % 360;
         return `hsl(${hue}, 70%, 50%)`;
       }
 
+      function spawnRandomTank(fullyHealed = false) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * GRID_SIZE);
+          y = Math.floor(Math.random() * GRID_SIZE);
+        } while (grid[y][x] !== ".");
+
+        const direction = ["up", "right", "down", "left"][
+          Math.floor(Math.random() * 4)
+        ];
+
+        // ถ้า fullyHealed = true ให้ tank เกิดใหม่มี HP 3, ถ้าไม่ใช่ให้สุ่ม HP 1 - 3
+        const hp = fullyHealed ? MAX_HP : Math.floor(Math.random() * 3) + 1;
+
+        const tank = {
+          id: tanks.length + 1,
+          x,
+          y,
+          direction,
+          symbol: `T${tanks.length + 1}`,
+          hp,
+          shootCooldown: 0,
+          shootRange: REGULAR_SHOOT_RANGE,
+          bulletSpeed: BULLET_SPEED,
+        };
+        tanks.push(tank);
+        grid[y][x] = tank.symbol;
+
+        const style = document.createElement("style");
+        style.textContent = `.tank${
+          tank.id
+        } { background-color: ${generateTankColor(tank.id)}; }`;
+        document.head.appendChild(style);
+
+        addToGameLog(`New tank T${tank.id} spawned with ${hp} HP!`);
+      }
+
       function initializeTanks() {
         for (let i = 0; i < TANK_COUNT; i++) {
-          let x, y;
-          do {
-            x = Math.floor(Math.random() * GRID_SIZE);
-            y = Math.floor(Math.random() * GRID_SIZE);
-          } while (grid[y][x] !== ".");
-
-          const direction = ["up", "right", "down", "left"][
-            Math.floor(Math.random() * 4)
-          ];
-          const tank = {
-            id: i + 1,
-            x,
-            y,
-            direction,
-            symbol: `T${i + 1}`,
-            hp: MAX_HP,
-            shootCooldown: 0,
-          };
-          tanks.push(tank);
-          grid[y][x] = tank.symbol;
-
-          const style = document.createElement("style");
-          style.textContent = `.tank${
-            i + 1
-          } { background-color: ${generateTankColor(i + 1)}; }`;
-          document.head.appendChild(style);
+          spawnRandomTank();
         }
+
+        let goldenX, goldenY;
+        do {
+          goldenX = Math.floor(Math.random() * GRID_SIZE);
+          goldenY = Math.floor(Math.random() * GRID_SIZE);
+        } while (grid[goldenY][goldenX] !== ".");
+
+        const goldenTank = {
+          id: "Golden",
+          x: goldenX,
+          y: goldenY,
+          direction: "up",
+          symbol: "G",
+          hp: GOLDEN_HP,
+          shootCooldown: 0,
+          shootRange: GOLDEN_SHOOT_RANGE,
+          bulletSpeed: GOLDEN_BULLET_SPEED,
+          isGolden: true,
+        };
+        tanks.push(goldenTank);
+        grid[goldenY][goldenX] = goldenTank.symbol;
+
+        let playerX, playerY;
+        do {
+          playerX = Math.floor(Math.random() * GRID_SIZE);
+          playerY = Math.floor(Math.random() * GRID_SIZE);
+        } while (grid[playerY][playerX] !== ".");
+
+        const playerTank = {
+          id: "Player",
+          x: playerX,
+          y: playerY,
+          direction: "up",
+          symbol: "P",
+          hp: PLAYER_HP,
+          shootCooldown: 0,
+          shootRange: PLAYER_SHOOT_RANGE,
+          bulletSpeed: BULLET_SPEED,
+          isPlayer: true,
+        };
+        tanks.push(playerTank);
+        grid[playerY][playerX] = playerTank.symbol;
       }
 
       function placeObstacles() {
@@ -214,15 +338,6 @@
           } while (grid[y][x] !== ".");
           grid[y][x] = OBSTACLE_SYMBOL;
         }
-      }
-
-      function updateGrid() {
-        grid = grid.map((row) =>
-          row.map((cell) => (cell === OBSTACLE_SYMBOL ? OBSTACLE_SYMBOL : "."))
-        );
-        tanks.forEach((tank) => {
-          grid[tank.y][tank.x] = tank.symbol;
-        });
       }
 
       function renderGrid() {
@@ -249,7 +364,9 @@
           tankContainer.style.top = `${tank.y * CELL_SIZE}px`;
 
           const tankElement = document.createElement("div");
-          tankElement.className = `tank tank${tank.id}`;
+          tankElement.className = `tank tank${tank.id} ${
+            tank.isGolden ? "golden-tank" : tank.isPlayer ? "player-tank" : ""
+          }`;
           tankElement.textContent = tank.symbol;
           const rotation = directionToDegrees(tank.direction);
           tankElement.style.transform = `rotate(${rotation}deg)`;
@@ -259,7 +376,12 @@
 
           const hpBar = document.createElement("div");
           hpBar.className = "hp-bar";
-          for (let i = 0; i < MAX_HP; i++) {
+          const totalHp = tank.isGolden
+            ? GOLDEN_HP
+            : tank.isPlayer
+            ? PLAYER_HP
+            : MAX_HP;
+          for (let i = 0; i < totalHp; i++) {
             const hp = document.createElement("div");
             hp.className = "hp";
             hp.style.opacity = i < tank.hp ? 1 : 0.3;
@@ -279,7 +401,7 @@
           gridElement.appendChild(tankContainer);
 
           const [dx, dy] = getDirectionVector(tank.direction);
-          for (let i = 1; i <= SHOOT_RANGE; i++) {
+          for (let i = 1; i <= tank.shootRange; i++) {
             const rangeX = tank.x + dx * i;
             const rangeY = tank.y + dy * i;
             if (
@@ -385,10 +507,10 @@
           newY < GRID_SIZE &&
           grid[newY][newX] === "."
         ) {
-          grid[tank.y][tank.x] = "."; // Clear the old position
+          grid[tank.y][tank.x] = ".";
           newTank.x = newX;
           newTank.y = newY;
-          grid[newY][newX] = tank.symbol; // Set the new position
+          grid[newY][newX] = tank.symbol;
           addToGameLog(`Tank ${tank.id} moved ${newDirection}`);
         } else {
           addToGameLog(
@@ -412,7 +534,7 @@
             y: tank.y,
             dx,
             dy,
-            range: SHOOT_RANGE,
+            range: tank.shootRange,
             shooterId: tank.id,
           });
           addToGameLog(`Tank ${tank.id} fired a shot!`);
@@ -458,13 +580,16 @@
             );
             if (hitTank) {
               hitTank.hp--;
-              addToGameLog(`Tank ${hitTank.id} was hit! HP`);
-              hitTank.hp--;
               addToGameLog(`Tank ${hitTank.id} was hit! HP: ${hitTank.hp}`);
               createExplosion(gridX, gridY);
               if (hitTank.hp <= 0) {
                 addToGameLog(`Tank ${hitTank.id} was destroyed!`);
-                grid[hitTank.y][hitTank.x] = "."; // Clear the destroyed tank from the grid
+                totalTankDeaths++; // นับจำนวน tank ที่ตาย
+                if (bullet.shooterId === "Player") {
+                  playerKills++;
+                  addToGameLog(`Player Tank destroyed tank ${hitTank.id}!`);
+                }
+                grid[hitTank.y][hitTank.x] = ".";
                 tanks = tanks.filter((t) => t.id !== hitTank.id);
               }
               return false;
@@ -487,7 +612,7 @@
         explosion.style.left = `${x * CELL_SIZE}px`;
         explosion.style.top = `${y * CELL_SIZE}px`;
         document.querySelector(".grid").appendChild(explosion);
-        setTimeout(() => explosion.remove(), 500); // Remove after animation
+        setTimeout(() => explosion.remove(), 500);
       }
 
       function addToGameLog(message) {
@@ -508,15 +633,26 @@
         });
       }
 
+      function showGameOverModal(kills) {
+        const modal = document.getElementById("gameOverModal");
+        const killCountText = document.getElementById("killCount");
+        killCountText.textContent = `Player Tank killed ${kills} tanks!`;
+        modal.style.display = "flex";
+      }
+
+      document
+        .getElementById("restartButton")
+        .addEventListener("click", function () {
+          window.location.reload();
+        });
+
       function checkGameOver() {
-        if (tanks.length <= 1) {
+        const playerTank = tanks.find((tank) => tank.id === "Player");
+        if (!playerTank) {
           clearInterval(gameInterval);
           clearInterval(bulletInterval);
-          if (tanks.length === 1) {
-            addToGameLog(`Game Over! Tank ${tanks[0].id} wins!`);
-          } else {
-            addToGameLog(`Game Over! It's a draw!`);
-          }
+          addToGameLog(`Game Over! Player Tank was destroyed!`);
+          showGameOverModal(playerKills);
           return true;
         }
         return false;
@@ -527,11 +663,19 @@
         tanks = tanks.map((tank) => {
           const newTank = moveTank(tank);
           if (Math.random() < 0.3) {
-            // 30% chance to shoot
             shoot(newTank);
           }
           return newTank;
         });
+
+        // ตรวจสอบว่าจำนวน tank ที่ตายถึง 10% ของจำนวนเริ่มต้นหรือไม่
+        if (totalTankDeaths >= TANK_COUNT * REGENERATION_THRESHOLD) {
+          totalTankDeaths = 0; // รีเซ็ตการนับจำนวน tank ที่ตาย
+          const tanksToSpawn = Math.min(10, MAX_TANK_COUNT - tanks.length);
+          for (let i = 0; i < tanksToSpawn; i++) {
+            spawnRandomTank(true); // tank ใหม่จะมี HP เต็ม 3 ดวง
+          }
+        }
 
         renderGrid();
 
@@ -543,7 +687,6 @@
       function initGame() {
         placeObstacles();
         initializeTanks();
-        updateGrid();
         renderGrid();
         gameInterval = setInterval(gameLoop, 1000);
         bulletInterval = setInterval(updateBullets, BULLET_SPEED);
