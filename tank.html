@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tank Game with Explosion Effects</title>
+    <title>Tank Game with Smooth Movement</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -54,8 +54,8 @@
         justify-content: center;
         align-items: center;
         color: white;
-        position: relative;
-        transition: transform 0.3s ease;
+        position: absolute;
+        transition: all 0.3s ease;
         z-index: 2;
         font-size: 10px;
       }
@@ -68,6 +68,7 @@
         top: 50%;
         left: 50%;
         transform-origin: left center;
+        transition: transform 0.3s ease;
       }
       .shoot-range {
         background-color: rgba(255, 255, 0, 0.2);
@@ -127,7 +128,7 @@
       const SHOOT_RANGE = 3;
       const OBSTACLE_COUNT = 40;
       const TANK_COUNT = 20;
-      const BULLET_SPEED = 200; // milliseconds per cell
+      const BULLET_SPEED = 300; // milliseconds per cell
       const CELL_SIZE = 31; // 30px + 1px gap
 
       let grid = Array(GRID_SIZE)
@@ -198,22 +199,21 @@
             cellElement.dataset.y = y;
             if (cell === OBSTACLE_SYMBOL) {
               cellElement.classList.add("obstacle");
-            } else if (cell !== ".") {
-              const tank = document.createElement("div");
-              tank.className = `tank tank${cell.slice(1)}`;
-              tank.textContent = cell;
-              const tankObj = tanks.find((t) => t.symbol === cell);
-              if (tankObj) {
-                const rotation = directionToDegrees(tankObj.direction);
-                tank.style.transform = `rotate(${rotation}deg)`;
-              }
-              cellElement.appendChild(tank);
             }
             gridElement.appendChild(cellElement);
           });
         });
 
         tanks.forEach((tank) => {
+          const tankElement = document.createElement("div");
+          tankElement.className = `tank tank${tank.id}`;
+          tankElement.textContent = tank.symbol;
+          tankElement.style.left = `${tank.x * CELL_SIZE}px`;
+          tankElement.style.top = `${tank.y * CELL_SIZE}px`;
+          const rotation = directionToDegrees(tank.direction);
+          tankElement.style.transform = `rotate(${rotation}deg)`;
+          gridElement.appendChild(tankElement);
+
           const [dx, dy] = getDirectionVector(tank.direction);
           for (let i = 1; i <= SHOOT_RANGE; i++) {
             const rangeX = tank.x + dx * i;
@@ -225,7 +225,7 @@
               rangeY < GRID_SIZE
             ) {
               if (grid[rangeY][rangeX] === OBSTACLE_SYMBOL) {
-                break; // Stop showing range when hitting an obstacle
+                break;
               }
               const rangeCell = document.querySelector(
                 `.cell[data-x="${rangeX}"][data-y="${rangeY}"]`
@@ -234,7 +234,7 @@
                 rangeCell.classList.add("shoot-range");
               }
             } else {
-              break; // Stop showing range when out of grid
+              break;
             }
           }
         });
@@ -465,7 +465,7 @@
         initializeTanks();
         updateGrid();
         renderGrid();
-        gameInterval = setInterval(gameLoop, 1000);
+        gameInterval = setInterval(gameLoop, 800); // เปลี่ยนจาก 1000 เป็น 300 เพื่อให้เคลื่อนไหวเร็วขึ้น
         bulletInterval = setInterval(updateBullets, BULLET_SPEED);
       }
 
