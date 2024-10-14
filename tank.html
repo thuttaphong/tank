@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tank Game with HP System and Shoot Countdown</title>
+    <title>Tank Game</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -385,8 +385,10 @@
           newY < GRID_SIZE &&
           grid[newY][newX] === "."
         ) {
+          grid[tank.y][tank.x] = "."; // Clear the old position
           newTank.x = newX;
           newTank.y = newY;
+          grid[newY][newX] = tank.symbol; // Set the new position
           addToGameLog(`Tank ${tank.id} moved ${newDirection}`);
         } else {
           addToGameLog(
@@ -456,10 +458,13 @@
             );
             if (hitTank) {
               hitTank.hp--;
+              addToGameLog(`Tank ${hitTank.id} was hit! HP`);
+              hitTank.hp--;
               addToGameLog(`Tank ${hitTank.id} was hit! HP: ${hitTank.hp}`);
               createExplosion(gridX, gridY);
               if (hitTank.hp <= 0) {
                 addToGameLog(`Tank ${hitTank.id} was destroyed!`);
+                grid[hitTank.y][hitTank.x] = "."; // Clear the destroyed tank from the grid
                 tanks = tanks.filter((t) => t.id !== hitTank.id);
               }
               return false;
@@ -528,7 +533,6 @@
           return newTank;
         });
 
-        updateGrid();
         renderGrid();
 
         if (checkGameOver()) {
